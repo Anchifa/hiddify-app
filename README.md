@@ -1,3 +1,9 @@
+> **OneDash** — a fork of [Hiddify](https://github.com/hiddify/hiddify-app) (thanks to the Hiddify team) for a small private VPN, under the same [license](LICENSE.md). Changes, all marked `OneDash` in the code:
+> - a subscription can send route rules (`route-rule` header: base64 of a RouteRule in proto3 JSON), put before the user's own rules;
+> - a subscription can send apps that bypass the tunnel on Android (`per-app-proxy` header: base64 of a JSON list of package names), added to App-based routing in Exclude mode;
+> - own Android id `app.onedash.client` and name, so it installs beside Hiddify; updates from this fork's releases;
+> - version patch = upstream patch × 100 + own build (5.9.15 → 5.9.1501); Android APK built by `.github/workflows/onedash.yml`.
+
 <div dir="ltr" align=center>
 
 [**فارسی 🇮🇷**](README_fa.md) / [**Русский 🇷🇺**](README_ru.md) / [**简体中文 🇨🇳**](README_cn.md) / [**日本語 🇯🇵**](README_ja.md) / [**Português-BR 🇧🇷**](README_br.md)

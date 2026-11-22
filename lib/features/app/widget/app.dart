@@ -21,6 +21,7 @@ import 'package:hiddify/core/theme/app_theme.dart';
 import 'package:hiddify/core/theme/theme_preferences.dart';
 import 'package:hiddify/core/utils/low_battery.dart';
 import 'package:hiddify/core/widget/ambient_motion.dart';
+import 'package:hiddify/features/app_based_routing/onedash_profile_apps.dart';
 import 'package:hiddify/features/app_based_routing/overview/app_based_routing_notifier.dart';
 import 'package:hiddify/features/app_update/notifier/app_update_notifier.dart';
 import 'package:hiddify/features/connection/notifier/connection_notifier.dart';
@@ -76,6 +77,8 @@ class App extends HookConsumerWidget with WidgetsBindingObserver, PresLogger {
     // detailed logging from Report a problem ends on time, also when the app was closed meanwhile
     ref.listen(traceSessionProvider, (_, _) {});
     if (PlatformUtils.isAndroid) ref.listen(appBasedRoutingProvider, (_, _) {});
+    // OneDash: the apps the active profile sends bypass the tunnel
+    if (PlatformUtils.isAndroid) ref.listen(oneDashProfileAppsProvider, (_, _) {});
     if (PlatformUtils.isDesktop) ref.listen(systemTrayNotifierProvider, (_, _) {});
 
     // a crash in the previous run is offered for sending once the first frame is up

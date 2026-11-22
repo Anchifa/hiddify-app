@@ -11,6 +11,7 @@ import 'package:hiddify/features/profile/data/profile_data_mapper.dart';
 import 'package:hiddify/features/profile/model/download_problem.dart';
 import 'package:hiddify/features/profile/model/profile_entity.dart';
 import 'package:hiddify/features/profile/model/profile_failure.dart';
+import 'package:hiddify/hiddifycore/generated/v2/config/route_rule.pb.dart';
 import 'package:hiddify/hiddifycore/generated/v2/hcore/hcore.pb.dart';
 import 'package:hiddify/singbox/model/singbox_config_enum.dart';
 import 'package:hiddify/singbox/model/singbox_proxy_type.dart';
@@ -64,6 +65,8 @@ class ProfileParser with InfraLogger {
     'keep-top-countries',
     'keep-top-pinned',
     'keep-tags',
+    // OneDash: the subscription's route rules, put before the user's own in applyProfileOverride
+    'profile-route-rules',
   ];
   static const allowedProfileHeaders = [
     'profile-title',
@@ -76,6 +79,10 @@ class ProfileParser with InfraLogger {
     'extra-security',
     'fragment',
     'keep-top',
+    // OneDash: route rules for the core (see profileRouteRules) and the apps that bypass the tunnel
+    // on Android (applied by oneDashProfileAppsProvider)
+    'route-rule',
+    'per-app-proxy',
   ];
 
   final DioHttpClient _httpClient;
@@ -637,6 +644,7 @@ class ProfileParser with InfraLogger {
     final fragmentInput = headers.remove('fragment')?.toString();
     final extraSecurityInput = headers.remove('extra-security')?.toString();
     final keepTopInput = headers.remove('keep-top')?.toString();
+    final routeRuleInput = headers.remove('route-rule')?.toString();
     // the user's choices only, never a subscription's
     headers.remove('keep-top-quick');
     headers.remove('keep-top-countries');
@@ -679,6 +687,11 @@ class ProfileParser with InfraLogger {
       headers['keep-tags'] = tags;
     }
 
+    // route-rule: the subscription's rules, kept for applyProfileOverride to put first
+    if (profileRouteRules(routeRuleInput) case final rules?) {
+      headers['profile-route-rules'] = rules;
+    }
+
     headers.removeWhere(
       (key, value) => !allowedOverrideConfigs.contains(key) || value == null || value.toString().isEmpty,
     );
@@ -691,10 +704,37 @@ class ProfileParser with InfraLogger {
     if (profileOverride == null) return main;
     if (profileOverride.contains("{")) {
       final profileOverrideMap = jsonDecode(profileOverride) as Map<String, dynamic>;
-      return _mergeJson(main, profileOverrideMap);
+      return _prependProfileRouteRules(_mergeJson(main, profileOverrideMap));
     } else {
       return main;
     }
+  }
+
+  /// OneDash: the `route-rule` header, base64 of a RouteRule in proto3 JSON (`{"rules": [...]}`), as
+  /// the core takes it. Only enabled rules are kept; a value that does not read is ignored.
+  static List<Object?>? profileRouteRules(String? value) {
+    if (value == null || value.trim().isEmpty) return null;
+    try {
+      final json = jsonDecode(utf8.decode(base64.decode(base64.normalize(value.trim()))));
+      final routeRule = RouteRule()..mergeFromProto3Json(json, ignoreUnknownFields: true);
+      final rules = routeRule.rules.where((rule) => rule.enabled).toList();
+      if (rules.isEmpty) return null;
+      final proto3 = RouteRule(rules: rules).toProto3Json()! as Map<String, dynamic>;
+      return proto3['rules'] as List<Object?>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// OneDash: the profile's route rules go before the user's own list (its built-in rules included),
+  /// so the subscription decides first what bypasses the tunnel.
+  static Map<String, dynamic> _prependProfileRouteRules(Map<String, dynamic> options) {
+    final rules = options.remove('profile-route-rules');
+    if (rules is! List || rules.isEmpty) return options;
+    final routeRule = Map<String, dynamic>.from((options['route-rule'] as Map?) ?? const {});
+    routeRule['rules'] = [...rules, ...((routeRule['rules'] as List?) ?? const [])];
+    options['route-rule'] = routeRule;
+    return options;
   }
 
   static Map<String, dynamic> _mergeJson(Map<String, dynamic> main, Map<String, dynamic> override) {

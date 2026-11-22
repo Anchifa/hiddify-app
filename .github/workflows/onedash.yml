@@ -1,0 +1,68 @@
+# OneDash: the Android APKs of this fork, published as a GitHub release named after pubspec's version,
+# which the app's own updater (Constants.githubReleasesApiUrl) finds and installs. Run by hand.
+# release.yml, winget.yml and windows-store-sync.yml are turned off in the fork: the release's tag
+# would otherwise start Hiddify's own release of every platform.
+name: OneDash Android
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      build: ${{ steps.version.outputs.build }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: version
+        run: |
+          set -euo pipefail
+          line=$(grep -m1 '^version:' pubspec.yaml | awk '{print $2}')
+          echo "name=${line%%+*}" >> "$GITHUB_OUTPUT"
+          echo "build=${line##*+}" >> "$GITHUB_OUTPUT"
+          echo "version $line"
+
+  android:
+    needs: version
+    uses: ./.github/workflows/build-android.yml
+    secrets: inherit
+    permissions:
+      contents: read
+    with:
+      release: true
+      channel: prod
+      targets: '["apk"]'
+      generated-code: false
+      build-number: ${{ needs.version.outputs.build }}
+
+  release:
+    needs: [version, android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: android-apk
+          path: out
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: v${{ needs.version.outputs.name }}
+        run: |
+          set -euo pipefail
+          ls -l out
+          gh release create "$TAG" out/*.apk \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "OneDash $TAG" \
+            --notes "## Changelog
+          - OneDash build $TAG on Hiddify. See README for what differs."
