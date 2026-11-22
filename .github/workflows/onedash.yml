@@ -1,7 +1,7 @@
-# OneDash: the Android APKs of this fork, published as a GitHub release named after pubspec's version,
-# which the app's own updater (Constants.githubReleasesApiUrl) finds and installs. Run by hand.
-# release.yml, winget.yml and windows-store-sync.yml are turned off in the fork: the release's tag
-# would otherwise start Hiddify's own release of every platform.
+# OneDash: the Android APKs and the Windows installer of this fork, published as a GitHub release named
+# after pubspec's version, which the app's own updater (Constants.githubReleasesApiUrl) finds and installs.
+# Run by hand. release.yml, winget.yml and windows-store-sync.yml are turned off in the fork: the
+# release's tag would otherwise start Hiddify's own release of every platform.
 name: OneDash Android
 
 on:
@@ -43,15 +43,52 @@ jobs:
       generated-code: false
       build-number: ${{ needs.version.outputs.build }}
 
+  # Windows Setup.exe, unsigned: Hiddify signs through Azure, and without its secrets the build stays
+  # unsigned, as a local one does. Only the installer: the MSIX needs a signature, the portable zip isn't used.
+  windows:
+    needs: version
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    env:
+      CHANNEL: prod
+      IS_GITHUB_ACTIONS: 1
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/actions/setup-flutter
+        with:
+          platform: windows
+          generated-code: false
+      - name: Build the Release tree
+        run: make windows-validate
+      - name: Package Setup.exe
+        run: make windows-exe-release
+      - name: Collect the installer
+        run: |
+          New-Item -ItemType Directory -Path out -Force | Out-Null
+          $exe = Get-ChildItem -Path dist -Recurse -File -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { throw "no Setup.exe under dist" }
+          Move-Item -Path $exe.FullName -Destination out/Hiddify-Windows-Setup-x64.exe
+          Get-ChildItem out
+      - uses: actions/upload-artifact@v6
+        with:
+          name: windows-exe
+          path: out
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
   release:
-    needs: [version, android]
+    needs: [version, android, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/download-artifact@v7
         with:
-          name: android-apk
+          # every artifact of the run: android-apk and windows-exe
+          merge-multiple: true
           path: out
       - name: Publish the release
         env:
@@ -60,7 +97,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -l out
-          gh release create "$TAG" out/*.apk \
+          gh release create "$TAG" out/*.apk out/*.exe \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "OneDash $TAG" \

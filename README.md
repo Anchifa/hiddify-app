@@ -2,7 +2,8 @@
 > - a subscription can send route rules (`route-rule` header: base64 of a RouteRule in proto3 JSON), put before the user's own rules;
 > - a subscription can send apps that bypass the tunnel on Android (`per-app-proxy` header: base64 of a JSON list of package names), added to App-based routing in Exclude mode;
 > - own Android id `app.onedash.client` and name, so it installs beside Hiddify; updates from this fork's releases;
-> - version patch = upstream patch × 100 + own build (5.9.15 → 5.9.1501); Android APK built by `.github/workflows/onedash.yml`.
+> - Windows installer with its own id, name and folder (`OneDash`), unsigned;
+> - version patch = upstream patch × 100 + own build (5.9.15 → 5.9.1501); Android APKs and the Windows installer built by `.github/workflows/onedash.yml`.
 
 <div dir="ltr" align=center>
 
